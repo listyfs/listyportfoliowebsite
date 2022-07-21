@@ -1,0 +1,202 @@
+<!DOCTYPE HTML>
+<!--
+	Phantom by HTML5 UP
+	html5up.net | @ajlkn
+	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
+-->
+<html>
+	<head>
+		<title>Generic - Phantom by HTML5 UP</title>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+		<link rel="stylesheet" href="assets/css/main.css" />
+		<noscript><link rel="stylesheet" href="assets/css/noscript.css" /></noscript>
+	</head>
+	<body class="is-preload">
+		<!-- Wrapper -->
+			<div id="wrapper">
+
+				<!-- Header -->
+					<header id="header">
+						<div class="inner">
+
+							<!-- Logo -->
+								<a href="index.html" class="logo">
+									<span class="symbol"><img src="images/logo.svg" alt="" /></span><span class="title">Listy Fazria</span>
+								</a>
+
+						</div>
+					</header>
+
+				
+				<!-- Main -->
+					<div id="main">
+						<div class="inner">
+							<h1>Covid-19 Data Exploration</h1>
+							<span class="image main"><img src="images/covid2.jpg" alt="" /></span>
+							<p>Covid-19 dataset is extracted from OurWorldInData.org to be subjected for exploration. Various Covid-19 indicator parameters, i.e. death percentage, population infected per country percentage, death count per continent and forecast of population infected per country, are then calculated using SQL server. Then the data is visualized using Tableau. The exploration is performed in March 2022, and dataset available is only till February 2022.
+							</p>
+							
+							<h3>SQL script for data exploration</h3>
+						<pre><code>select Location, date, total_cases, new_cases, total_deaths, population 
+	from master..CovidDeaths
+	order by 1,2
+						
+-- Looking at Total Cases vs Total Deaths
+-- Shows likelihood of dying if you contract covid in your country
+select Location, date, total_cases, new_cases, total_deaths, (total_deaths/total_cases)*100 as DeathPercentage
+	from master..CovidDeaths
+	--where location like '%Indonesia%'
+	order by 1,2
+						
+-- Looking at Total Cases vs Population
+-- Shows How likely people will get Covid in the country
+select Location, date, population, total_cases, (total_cases/population)*100 as CovidPercentage
+	from master..CovidDeaths
+	--where location like '%Indonesia%'
+	order by 1,2
+						
+--What country have the highest infection rate compared to population
+select Location, population, max(total_cases) as HighestInfectionCount, max(total_cases/population)*100 as PercentPopulationInfected
+	from master..CovidDeaths
+	-- where location like '%Indonesia%'
+	group by Location, Population
+	order by PercentPopulationInfected desc
+						
+--What country have the highest infection rate compared to population
+select Location, population, date, max(total_cases) as HighestInfectionCount, max(total_cases/population)*100 as PercentPopulationInfected
+	from master..CovidDeaths
+	-- where location like '%Indonesia%'
+	group by Location, Population, date
+	order by PercentPopulationInfected desc
+						
+-- Showing Countries with Highest Death Count
+select Location, max(cast(total_deaths as int)) as TotalDeathCount
+	from master..CovidDeaths
+	where continent is not null
+	group by Location
+	order by TotalDeathCount desc
+						
+-- BREAK NUMBERS BY CONTINENT
+select Location, max(cast(total_deaths as int)) as TotalDeathCount
+	from master..CovidDeaths
+	where continent is null
+	and Location not in ('World', 'Upper middle income', 'High income', 'Lower middle income', 'Low income', 'International', 'European Union')
+	group by Location
+	order by TotalDeathCount desc
+						
+--Global numbers
+select sum(new_cases) as TotalCases, sum(cast(new_deaths as int)) as TotalDeath, 
+Sum(cast(new_deaths as int))/sum(new_cases)*100 as DeathPercentage
+	from master..CovidDeaths
+	where continent is not null
+	--group by date
+	order by 1,2
+						
+						
+-- USE CTE
+With PopvsVac (Continent, Location, Date, Population, New_Vaccinations, CumVac)
+as
+(
+Select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations
+, SUM(cast(vac.new_vaccinations as bigint)) OVER (Partition by dea.Location Order by dea.location, dea.Date) as CumVac
+	From master..CovidVaccinations vac
+	Join master..CovidDeaths dea
+		On dea.location = vac.location
+		and dea.date = vac.date
+		where dea.continent is not null
+		--order by 2,3
+)
+Select *, (CumVac/Population)*100
+	From PopvsVac
+						
+--TEMP TABLE
+DROP Table if exists #PercentPopulationVaccinated
+Create Table #PercentPopulationVaccinated
+(
+Continent nvarchar (255),
+Location nvarchar (255),
+Date datetime,
+Population numeric,
+New_vaccinations numeric,
+CumVac numeric
+)
+						
+Insert into #PercentPopulationVaccinated
+Select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations
+, SUM(cast(vac.new_vaccinations as bigint)) OVER (Partition by dea.Location Order by dea.location, dea.Date) as CumVac
+	From master..CovidVaccinations vac
+	Join master..CovidDeaths dea
+		On dea.location = vac.location
+		and dea.date = vac.date
+		where dea.continent is not null
+	--order by 2,3
+						
+Select *, (CumVac/Population)*100
+	From #PercentPopulationVaccinated
+						
+						
+						
+						
+--CREATE VIEW to store data for later visualisation
+						
+Create View PercentPopulationVaccinated as
+Select dea.continent, dea.location, dea.date, dea.population, vac.new_vaccinations
+, SUM(cast(vac.new_vaccinations as bigint)) OVER (Partition by dea.Location Order by dea.location, dea.Date) as CumVac
+	From master..CovidVaccinations vac
+	Join master..CovidDeaths dea
+		On dea.location = vac.location
+		and dea.date = vac.date
+	where dea.continent is not null
+						
+						
+Select *
+	From PercentPopulationVaccinated</code></pre>
+						
+						<h3>Data Visualization with Tableau</h3>
+				
+						<div class='tableauPlaceholder' id='viz1658375232511' style='position: relative'><noscript><a href='#'><img alt='Dashboard 1 ' src='https:&#47;&#47;public.tableau.com&#47;static&#47;images&#47;Co&#47;CovidDashboard_16496549527190&#47;Dashboard1&#47;1_rss.png' style='border: none' /></a></noscript><object class='tableauViz'  style='display:none;'><param name='host_url' value='https%3A%2F%2Fpublic.tableau.com%2F' /> <param name='embed_code_version' value='3' /> <param name='site_root' value='' /><param name='name' value='CovidDashboard_16496549527190&#47;Dashboard1' /><param name='tabs' value='no' /><param name='toolbar' value='yes' /><param name='static_image' value='https:&#47;&#47;public.tableau.com&#47;static&#47;images&#47;Co&#47;CovidDashboard_16496549527190&#47;Dashboard1&#47;1.png' /> <param name='animate_transition' value='yes' /><param name='display_static_image' value='yes' /><param name='display_spinner' value='yes' /><param name='display_overlay' value='yes' /><param name='display_count' value='yes' /><param name='language' value='en-US' /></object></div>                <script type='text/javascript'>                    var divElement = document.getElementById('viz1658375232511');                    var vizElement = divElement.getElementsByTagName('object')[0];                    if ( divElement.offsetWidth > 800 ) { vizElement.style.width='100%';vizElement.style.height=(divElement.offsetWidth*0.75)+'px';} else if ( divElement.offsetWidth > 500 ) { vizElement.style.width='100%';vizElement.style.height=(divElement.offsetWidth*0.75)+'px';} else { vizElement.style.width='100%';vizElement.style.height='1327px';}                     var scriptElement = document.createElement('script');                    scriptElement.src = 'https://public.tableau.com/javascripts/api/viz_v1.js';                    vizElement.parentNode.insertBefore(scriptElement, vizElement);                </script>
+						<br>
+						<p>By February 2022, there are 469.5 million cases worldwide and 6 million death total. That is death percentage of 1.289%. Most of those deaths are in Europe, North America and Asia with 1.75 mil, 1.4 mil and 1.39 mil respectively. The lowest death count are in Africa and Oceania.</p>
+						<p>In February 2022, 26.89% average population is infected in the UK while in the US, about 23.36% population is infected. This might be due to some health measures had been lifted at these countries (mask mandates, school and work closures), and a new Covid variant (Omicron) has just been discovered. In China, only about 0.01% population is infected. This is mainly due to their zero Covid policy and health measures are relatively stricter.</p>
+
+						<section>
+						
+							<ul class="actions stacked">
+								<li><a href="index.html" class="button primary fit">Back to Homepage</a></li>
+							
+							</ul>
+						</section>
+						</div>
+					</div>
+					
+
+				<!-- Footer -->
+					<footer id="footer">
+						<div class="inner">
+							
+							<section>
+								<h2>Follow</h2>
+								<ul class="icons">
+									<li><a href="https://www.linkedin.com/in/listyfazria/" class="icon brands style2 fa-linkedin"><span class="label">Linkedin</span></a></li>
+									<li><a href="https://github.com/listyfs" class="icon brands style2 fa-github"><span class="label">GitHub</span></a></li>
+									<li><a href="listyfazria@gmail.com" class="icon solid style2 fa-envelope"><span class="label">Email</span></a></li>
+								</ul>
+							</section>
+							<ul class="copyright">
+								<li>&copy; Untitled. All rights reserved</li><li>Design: <a href="http://html5up.net">HTML5 UP</a></li>
+							</ul>
+						</div>
+					</footer>
+
+			</div>
+
+		<!-- Scripts -->
+			<script src="assets/js/jquery.min.js"></script>
+			<script src="assets/js/browser.min.js"></script>
+			<script src="assets/js/breakpoints.min.js"></script>
+			<script src="assets/js/util.js"></script>
+			<script src="assets/js/main.js"></script>
+
+	</body>
+</html>
